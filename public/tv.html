@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IPTV Live TV</title>  <meta name="description" content="Live IPTV channel player with auto-updated M3U playlist" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --accent:   #00e5a0;
+      --accent2:  #0099ff;
+      --danger:   #ff4d6d;
+      --bg:       #0a0c10;
+      --surface:  #12161e;
+      --surface2: #1a1f2b;
+      --border:   #232836;
+      --text:     #e8eaf0;
+      --muted:    #6b7280;
+      --font-mono: 'Space Mono', monospace;
+      --font-body: 'DM Sans', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      position: sticky; top: 0; z-index: 200;
+      background: rgba(10,12,16,0.92);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+    .header-inner {
+      max-width: 1600px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px; gap: 16px;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-mono); font-size: 1rem; font-weight: 700;
+      color: var(--accent); letter-spacing: -0.5px;
+    }
+    .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: blink 1.4s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .pill {
+      font-family: var(--font-mono); font-size: 0.7rem;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 20px; padding: 4px 12px; color: var(--muted);
+    }
+    .pill span { color: var(--accent); font-weight: 700; }
+    a.back-link {
+      font-size: 0.85rem; color: var(--muted); text-decoration: none;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 6px 14px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    a.back-link:hover { color: var(--text); border-color: var(--accent); }
+
+    /* ── Layout ── */
+    .main { flex: 1; max-width: 1600px; margin: 0 auto; width: 100%; padding: 20px 24px; }
+    .tv-layout { display: grid; grid-template-columns: 1fr 380px; gap: 20px; }
+
+    /* ── Player ── */
+    .player-wrap {
+      position: relative; border-radius: 14px; overflow: hidden;
+      background: #000; aspect-ratio: 16/9;
+      box-shadow: 0 0 0 1px var(--border), 0 20px 60px rgba(0,0,0,0.6);
+    }
+    #tvPlayer {
+      width: 100%; height: 100%; display: block; background: #000;
+    }
+    #tvPlayer::-webkit-media-controls { display: none !important; }
+
+    /* Loading overlay */
+    .overlay {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.82);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 14px; z-index: 10; border-radius: 14px;
+      transition: opacity 0.3s;
+    }
+    .overlay.hidden { opacity: 0; pointer-events: none; }
+    .spinner {
+      width: 42px; height: 42px;
+      border: 3px solid rgba(255,255,255,0.15);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .overlay p { font-size: 0.9rem; color: rgba(255,255,255,0.7); font-family: var(--font-mono); }
+
+    /* Custom controls bar */
+    .ctrl-bar {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, transparent 100%);
+      padding: 28px 16px 12px;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      opacity: 0; transition: opacity 0.3s; z-index: 5;
+    }
+    .player-wrap:hover .ctrl-bar { opacity: 1; }
+
+    .ctrl-group { display: flex; align-items: center; gap: 8px; }
+    .cb {
+      background: rgba(255,255,255,0.12);
+      border: none; color: #fff;
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 1rem;
+      backdrop-filter: blur(4px);
+      transition: background 0.2s, transform 0.15s;
+    }
+    .cb:hover { background: rgba(255,255,255,0.25); transform: scale(1.1); }
+    .cb.blue { background: rgba(0,153,255,0.55); }
+    .cb.blue:hover { background: rgba(0,153,255,0.8); }
+    .cb.red { background: rgba(255,77,109,0.55); }
+    .cb.red:hover { background: rgba(255,77,109,0.8); }
+
+    .vol-wrap { display: flex; align-items: center; gap: 6px; }
+    .vol-track {
+      width: 72px; height: 3px;
+      background: rgba(255,255,255,0.25); border-radius: 2px;
+      cursor: pointer; position: relative;
+    }
+    .vol-fill { height: 100%; background: #fff; border-radius: 2px; width: 70%; }
+
+    /* Channel info strip */
+    .ch-info {
+      margin-top: 12px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 16px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .ch-info-left { display: flex; align-items: center; gap: 12px; }
+    .ch-logo {
+      width: 44px; height: 44px; border-radius: 10px;
+      object-fit: cover; background: var(--surface2);
+      flex-shrink: 0;
+    }
+    .ch-name { font-size: 1.05rem; font-weight: 600; margin-bottom: 2px; }
+    .ch-group { font-size: 0.78rem; color: var(--muted); font-family: var(--font-mono); }
+    .status-badge {
+      font-family: var(--font-mono); font-size: 0.72rem;
+      padding: 5px 12px; border-radius: 20px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--muted); white-space: nowrap;
+      transition: all 0.3s;
+    }
+    .status-badge.live { border-color: var(--accent); color: var(--accent); }
+    .status-badge.error { border-color: var(--danger); color: var(--danger); }
+
+    /* ── Channel list ── */
+    .ch-panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; display: flex; flex-direction: column;
+      max-height: calc(100vh - 110px); overflow: hidden;
+    }
+    .ch-panel-header {
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      flex-shrink: 0;
+    }
+    .ch-panel-title {
+      font-family: var(--font-mono); font-size: 0.78rem;
+      color: var(--muted); text-transform: uppercase; letter-spacing: 1px;
+    }
+    .cat-select {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); border-radius: 8px;
+      padding: 5px 10px; font-size: 0.8rem; cursor: pointer;
+      font-family: var(--font-body); outline: none;
+    }
+    .cat-select:focus { border-color: var(--accent); }
+
+    .search-wrap { padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .search-input {
+      width: 100%; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); padding: 8px 12px;
+      font-size: 0.85rem; font-family: var(--font-body); outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-input::placeholder { color: var(--muted); }
+    .search-input:focus { border-color: var(--accent); }
+
+    .ch-list { overflow-y: auto; flex: 1; padding: 8px; }
+    .ch-list::-webkit-scrollbar { width: 4px; }
+    .ch-list::-webkit-scrollbar-track { background: transparent; }
+    .ch-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .ch-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 10px; border-radius: 10px;
+      cursor: pointer; border: 1px solid transparent;
+      transition: all 0.18s; margin-bottom: 4px;
+    }
+    .ch-item:hover { background: var(--surface2); border-color: var(--border); }
+    .ch-item.active {
+      background: rgba(0,229,160,0.07);
+      border-color: rgba(0,229,160,0.35);
+    }
+    .ch-item-logo {
+      width: 40px; height: 40px; border-radius: 8px;
+      object-fit: cover; background: var(--surface2); flex-shrink: 0;
+    }
+    .ch-item-info { flex: 1; min-width: 0; }
+    .ch-item-name {
+      font-size: 0.88rem; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-bottom: 2px;
+    }
+    .ch-item-tag {
+      font-size: 0.7rem; color: var(--muted);
+      font-family: var(--font-mono);
+      background: var(--surface2); border-radius: 4px;
+      padding: 1px 6px; display: inline-block;
+    }
+    .ch-item.active .ch-item-tag { color: var(--accent); }
+    .now-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+
+    /* Error / empty state */
+    .empty-state {
+      padding: 40px 16px; text-align: center; color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    /* ── Keyboard hint ── */
+    .kbd-hints {
+      margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .kbd { 
+      font-family: var(--font-mono); font-size: 0.68rem;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; padding: 3px 8px; color: var(--muted);
+    }
+    .kbd strong { color: var(--text); }
+
+    /* ── Responsive ── */
+    @media (max-width: 1100px) {
+      .tv-layout { grid-template-columns: 1fr; }
+      .ch-panel { max-height: 480px; }
+    }
+    @media (max-width: 640px) {
+      .main { padding: 12px; }
+      header { padding: 0 12px; }
+      .kbd-hints { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-dot"></div>
+      IPTV LIVE
+    </div>
+    <div class="header-right">
+      <div class="pill" id="sourcePill" title="Current source">Source: <span id="sourceLabel">—</span></div>
+      <div class="pill">Channels: <span id="channelCount">—</span></div>
+      <select id="srcSwitch" style="background:#1a1f2b;border:1px solid #232836;color:#e8eaf0;border-radius:8px;padding:5px 10px;font-size:0.8rem;cursor:pointer;outline:none" onchange="switchSource(this.value)">
+        <option value="">Switch source…</option>
+        <option value="search">🔍 GitHub Search Results</option>
+        <option value="github">🐙 GitHub Repo Sources</option>
+        <option value="index">🏠 Original Source</option>
+      </select>
+      <a class="back-link" href="/">← Dashboard</a>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+  <div class="tv-layout">
+
+    <!-- LEFT: Player -->
+    <div>
+      <div class="player-wrap" id="playerWrap">
+        <div class="overlay" id="overlay">
+          <div class="spinner"></div>
+          <p id="overlayMsg">Loading channels…</p>
+        </div>
+
+        <video id="tvPlayer" autoplay playsinline></video>
+
+        <!-- Controls bar -->
+        <div class="ctrl-bar">
+          <div class="ctrl-group">
+            <button class="cb" id="playBtn" title="Play/Pause (Space)">⏸</button>
+            <button class="cb blue" id="prevBtn" title="Previous channel (←)">◀</button>
+            <button class="cb blue" id="nextBtn" title="Next channel (→)">▶</button>
+            <div class="vol-wrap">
+              <button class="cb" id="volBtn" title="Mute (M)">🔊</button>
+              <div class="vol-track" id="volTrack">
+                <div class="vol-fill" id="volFill"></div>
+              </div>
+            </div>
+          </div>
+          <div class="ctrl-group">
+            <button class="cb red" id="test1Btn" title="Test stream 1">🔧1</button>
+            <button class="cb red" id="test2Btn" title="Test stream 2">🔧2</button>
+            <button class="cb" id="fsBtn" title="Fullscreen (F)">⛶</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Channel info strip -->
+      <div class="ch-info">
+        <div class="ch-info-left">
+          <img id="nowLogo" class="ch-logo" src="" alt="Channel logo" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22><rect width=%2240%22 height=%2240%22 fill=%22%231a1f2b%22/><text x=%2250%%22 y=%2255%%22 text-anchor=%22middle%22 font-size=%2218%22>📺</text></svg>'" />
+          <div>
+            <div class="ch-name" id="nowName">Select a channel</div>
+            <div class="ch-group" id="nowGroup">—</div>
+          </div>
+        </div>
+        <div class="status-badge" id="statusBadge">📡 Idle</div>
+      </div>
+
+      <!-- Keyboard shortcuts -->
+      <div class="kbd-hints">
+        <div class="kbd"><strong>Space</strong> play/pause</div>
+        <div class="kbd"><strong>← →</strong> prev/next channel</div>
+        <div class="kbd"><strong>M</strong> mute</div>
+        <div class="kbd"><strong>F</strong> fullscreen</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Channel list -->
+    <div class="ch-panel">
+      <div class="ch-panel-header">
+        <div class="ch-panel-title">Live Channels</div>
+        <select class="cat-select" id="catSelect">
+          <option value="all">All Categories</option>
+        </select>
+      </div>
+      <div class="search-wrap">
+        <input class="search-input" id="searchInput" type="text" placeholder="Search channels…" />
+      </div>
+      <div class="ch-list" id="chList">
+        <div class="empty-state">Loading…</div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+  // ── Config ────────────────────────────────────────────────────────────────
+  // Supports ?src=search|github|index|<custom_url>
+  const SOURCES = {
+    search: { url: '/search.m3u',  label: 'GitHub Search Results',  desc: 'Recently verified working streams from GitHub search' },
+    github: { url: '/github.m3u',  label: 'GitHub Repo Sources',    desc: 'Channels from curated GitHub M3U repositories' },
+    index:  { url: '/index.m3u',   label: 'Original Source',        desc: 'Channels from the original IPTV source' },
+  };
+
+  function resolveSource() {
+    const params = new URLSearchParams(location.search);
+    const src = params.get('src') || 'index';
+    if (SOURCES[src]) return SOURCES[src];
+    // treat as raw URL
+    return { url: src, label: 'Custom Source', desc: src };
+  }
+
+  const SOURCE   = resolveSource();
+  const M3U_URL  = SOURCE.url;
+  const TEST_URL_1   = 'http://devimages.apple.com.edgekey.net/streaming/examples/bipbop_4x3/gear2/prog_index.m3u8';
+  const TEST_URL_2   = 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8';
+  const FALLBACK_IMG = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" fill="%231a1f2b"/><text x="50%" y="55%" text-anchor="middle" font-size="18">📺</text></svg>';
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  let allChannels    = [];
+  let filtered       = [];
+  let currentIdx     = -1;
+  let isTestPlaying  = false;
+  let lastChannel    = null;
+
+  // ── Elements ──────────────────────────────────────────────────────────────
+  const player    = document.getElementById('tvPlayer');
+  const overlay   = document.getElementById('overlay');
+  const overlayMsg= document.getElementById('overlayMsg');
+  const playBtn   = document.getElementById('playBtn');
+  const prevBtn   = document.getElementById('prevBtn');
+  const nextBtn   = document.getElementById('nextBtn');
+  const volBtn    = document.getElementById('volBtn');
+  const volTrack  = document.getElementById('volTrack');
+  const volFill   = document.getElementById('volFill');
+  const fsBtn     = document.getElementById('fsBtn');
+  const test1Btn  = document.getElementById('test1Btn');
+  const test2Btn  = document.getElementById('test2Btn');
+  const nowLogo   = document.getElementById('nowLogo');
+  const nowName   = document.getElementById('nowName');
+  const nowGroup  = document.getElementById('nowGroup');
+  const statusBadge = document.getElementById('statusBadge');
+  const catSelect = document.getElementById('catSelect');
+  const searchInput = document.getElementById('searchInput');
+  const chList    = document.getElementById('chList');
+  const channelCountEl = document.getElementById('channelCount');
+
+  // ── M3U Parser ────────────────────────────────────────────────────────────
+  function parseM3U(text) {
+    const channels = [];
+    const cats = new Set();
+    const lines = text.split('\n');
+    let cur = null;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.startsWith('#EXTINF:')) {
+        cur = { name: '', logo: '', url: '', group: 'Other' };
+        const logoM = line.match(/tvg-logo="([^"]+)"/);
+        if (logoM) cur.logo = logoM[1];
+        const groupM = line.match(/group-title="([^"]+)"/);
+        if (groupM) { cur.group = groupM[1]; cats.add(groupM[1]); }
+        const nameM = line.match(/,(.+)$/);
+        if (nameM) cur.name = nameM[1].trim();
+      } else if (line && !line.startsWith('#') && cur) {
+        cur.url = line;
+        if (cur.name && cur.url) channels.push(cur);
+        cur = null;
+      }
+    }
+    return { channels, cats: Array.from(cats).sort() };
+  }
+
+  // ── Load channels ─────────────────────────────────────────────────────────
+  async function loadChannels() {
+    showOverlay('Loading channel list…');
+    try {
+      const res = await fetch(M3U_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      const { channels, cats } = parseM3U(text);
+      allChannels = channels;
+      channelCountEl.textContent = channels.length;
+
+      // Populate category dropdown
+      cats.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat; opt.textContent = cat;
+        catSelect.appendChild(opt);
+      });
+
+      applyFilters();
+      hideOverlay();
+
+      // Auto-play first channel
+      if (allChannels.length > 0) playChannel(allChannels[0], 0);
+    } catch(e) {
+      const hint = SOURCE.url.includes('search')
+        ? 'Run a <strong>GitHub Raw Search</strong> on the Dashboard first.'
+        : SOURCE.url.includes('github')
+        ? 'Run <strong>Fetch All Repo Sources</strong> on the Dashboard first.'
+        : 'Run an <strong>Update</strong> on the Dashboard first.';
+      chList.innerHTML = `<div class="empty-state">❌ Failed to load channels.<br><br>${hint}<br><br><small>${e.message}</small></div>`;
+      setStatus('Load failed', 'error');
+      hideOverlay();
+    }
+  }
+
+  // ── Filter + render ───────────────────────────────────────────────────────
+  function applyFilters() {
+    const cat = catSelect.value;
+    const q   = searchInput.value.trim().toLowerCase();
+    filtered  = allChannels.filter(ch => {
+      const catOk = cat === 'all' || ch.group === cat;
+      const nameOk = !q || ch.name.toLowerCase().includes(q);
+      return catOk && nameOk;
+    });
+    renderList();
+  }
+
+  function renderList() {
+    if (!filtered.length) {
+      chList.innerHTML = '<div class="empty-state">No channels found.</div>';
+      return;
+    }
+    chList.innerHTML = filtered.map((ch, i) => {
+      const origIdx = allChannels.indexOf(ch);
+      const active  = origIdx === currentIdx && !isTestPlaying;
+      return `
+        <div class="ch-item ${active ? 'active' : ''}" data-idx="${origIdx}">
+          <img class="ch-item-logo"
+            src="${ch.logo || FALLBACK_IMG}"
+            alt="${ch.name}"
+            onerror="this.src='${FALLBACK_IMG}'" />
+          <div class="ch-item-info">
+            <div class="ch-item-name">${ch.name}</div>
+            <span class="ch-item-tag">${ch.group}</span>
+          </div>
+          ${active ? '<div class="now-dot"></div>' : ''}
+        </div>`;
+    }).join('');
+
+    chList.querySelectorAll('.ch-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = parseInt(el.dataset.idx);
+        playChannel(allChannels[idx], idx);
+      });
+    });
+  }
+
+  // ── Play channel ──────────────────────────────────────────────────────────
+  function playChannel(ch, idx) {
+    currentIdx     = idx;
+    isTestPlaying  = false;
+    lastChannel    = ch;
+
+    nowName.textContent  = ch.name;
+    nowGroup.textContent = ch.group + ' · Now Playing';
+    nowLogo.src          = ch.logo || FALLBACK_IMG;
+    setStatus('Connecting…');
+
+    showOverlay(`Switching to ${ch.name}…`);
+    player.src = ch.url;
+    player.load();
+    player.play()
+      .then(() => { hideOverlay(); setStatus('🟢 Live', 'live'); })
+      .catch(() => {
+        showError(ch.name, () => playChannel(ch, idx));
+        setStatus('Stream unavailable', 'error');
+      });
+
+    renderList();
+  }
+
+  function playTest(n) {
+    const url = n === 1 ? TEST_URL_1 : TEST_URL_2;
+    isTestPlaying = true;
+    nowName.textContent  = `Test Stream ${n}`;
+    nowGroup.textContent = '🧪 Test video';
+    nowLogo.src          = FALLBACK_IMG;
+    setStatus('Loading test…');
+    showOverlay(`Loading test stream ${n}…`);
+    player.src = url;
+    player.load();
+    player.play()
+      .then(() => { hideOverlay(); setStatus('🟢 Test playing', 'live'); })
+      .catch(() => { showError(`Test ${n}`, () => playTest(n)); setStatus('Test failed', 'error'); });
+    renderList();
+  }
+
+  function playPrev() {
+    if (isTestPlaying && lastChannel) { restoreLast(); return; }
+    if (!allChannels.length) return;
+    currentIdx = (currentIdx - 1 + allChannels.length) % allChannels.length;
+    playChannel(allChannels[currentIdx], currentIdx);
+  }
+  function playNext() {
+    if (isTestPlaying && lastChannel) { restoreLast(); return; }
+    if (!allChannels.length) return;
+    currentIdx = (currentIdx + 1) % allChannels.length;
+    playChannel(allChannels[currentIdx], currentIdx);
+  }
+  function restoreLast() {
+    const idx = allChannels.indexOf(lastChannel);
+    if (idx !== -1) playChannel(lastChannel, idx);
+  }
+
+  // ── Overlay helpers ───────────────────────────────────────────────────────
+  function showOverlay(msg) {
+    overlayMsg.textContent = msg;
+    overlay.innerHTML = `<div class="spinner"></div><p>${msg}</p>`;
+    overlay.classList.remove('hidden');
+  }
+  function hideOverlay() { overlay.classList.add('hidden'); }
+  function showError(label, retry) {
+    overlay.innerHTML = `
+      <div style="text-align:center;padding:0 20px">
+        <div style="font-size:2.5rem;margin-bottom:12px">📡</div>
+        <div style="font-weight:600;margin-bottom:6px">${label}</div>
+        <div style="color:#9ca3af;font-size:.85rem;margin-bottom:16px">Stream unavailable or blocked</div>
+        <button onclick="arguments[0].stopPropagation()" id="retryBtn"
+          style="background:var(--accent);color:#000;border:none;border-radius:8px;
+                 padding:9px 22px;font-weight:600;cursor:pointer;font-size:.9rem">
+          Retry
+        </button>
+      </div>`;
+    overlay.classList.remove('hidden');
+    overlay.querySelector('#retryBtn').addEventListener('click', retry);
+  }
+
+  function setStatus(txt, type = '') {
+    statusBadge.textContent = txt;
+    statusBadge.className   = 'status-badge' + (type ? ' ' + type : '');
+  }
+
+  // ── Volume ────────────────────────────────────────────────────────────────
+  function syncVol() {
+    const v = player.muted ? 0 : player.volume;
+    volFill.style.width = (v * 100) + '%';
+    volBtn.textContent  = v === 0 ? '🔇' : '🔊';
+  }
+  volTrack.addEventListener('click', e => {
+    const r = volTrack.getBoundingClientRect();
+    player.volume = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    player.muted  = false;
+    syncVol();
+  });
+  volBtn.addEventListener('click', () => { player.muted = !player.muted; syncVol(); });
+
+  // ── Player events ─────────────────────────────────────────────────────────
+  player.addEventListener('play',    () => { playBtn.textContent = '⏸'; });
+  player.addEventListener('pause',   () => { playBtn.textContent = '▶'; });
+  player.addEventListener('waiting', () => showOverlay('Buffering…'));
+  player.addEventListener('canplay', hideOverlay);
+  player.addEventListener('volumechange', syncVol);
+  player.addEventListener('error',   () => setStatus('Stream error', 'error'));
+
+  // ── Controls ──────────────────────────────────────────────────────────────
+  playBtn.addEventListener('click',  () => player.paused ? player.play() : player.pause());
+  prevBtn.addEventListener('click',  playPrev);
+  nextBtn.addEventListener('click',  playNext);
+  test1Btn.addEventListener('click', () => playTest(1));
+  test2Btn.addEventListener('click', () => playTest(2));
+  fsBtn.addEventListener('click',    () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else player.requestFullscreen?.();
+  });
+
+  catSelect.addEventListener('change', applyFilters);
+  searchInput.addEventListener('input', applyFilters);
+
+  // ── Keyboard ──────────────────────────────────────────────────────────────
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input,select,textarea')) return;
+    if (e.code === 'Space')       { e.preventDefault(); player.paused ? player.play() : player.pause(); }
+    if (e.code === 'ArrowLeft')   { e.preventDefault(); playPrev(); }
+    if (e.code === 'ArrowRight')  { e.preventDefault(); playNext(); }
+    if (e.code === 'KeyM')        { player.muted = !player.muted; syncVol(); }
+    if (e.code === 'KeyF')        { fsBtn.click(); }
+  });
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  // Set source label
+  document.getElementById('sourceLabel').textContent = SOURCE.label;
+  document.title = `IPTV — ${SOURCE.label}`;
+
+  function switchSource(src) {
+    if (!src) return;
+    location.href = '/tv.html?src=' + encodeURIComponent(src);
+  }
+
+  syncVol();
+  loadChannels();
+</script>
+</body>
+</html>

@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IPTV Server Dashboard</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,sans-serif;background:#0b0e17;color:#e2e8f0;min-height:100vh;padding:1.5rem}
+    h1{font-size:1.5rem;color:#7dd3fc;margin-bottom:.3rem}
+    p.sub{color:#475569;margin-bottom:1.5rem;font-size:.85rem}
+
+    /* tabs */
+    .tabs{display:flex;gap:.4rem;margin-bottom:1.5rem;flex-wrap:wrap}
+    .tab{background:#1a2235;border:none;color:#94a3b8;border-radius:8px;padding:.45rem 1.1rem;cursor:pointer;font-size:.88rem;transition:background .15s,color .15s}
+    .tab.active{background:#0369a1;color:#fff}
+    .tab:hover:not(.active){background:#1e2d45}
+    .panel{display:none}.panel.active{display:block}
+
+    /* stat cards */
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.75rem;margin-bottom:1.5rem}
+    .card{background:#131929;border:1px solid #1e2d45;border-radius:10px;padding:1.1rem .9rem}
+    .card .val{font-size:1.8rem;font-weight:700;color:#38bdf8;line-height:1;font-variant-numeric:tabular-nums}
+    .card .val.g{color:#4ade80}.card .val.r{color:#f87171}.card .val.y{color:#fbbf24}.card .val.p{color:#a78bfa}
+    .card .lbl{font-size:.75rem;color:#64748b;margin-top:.3rem}
+
+    /* sections */
+    .section{background:#131929;border:1px solid #1e2d45;border-radius:10px;padding:1.2rem;margin-bottom:1.2rem}
+    .section h2{font-size:.92rem;color:#7dd3fc;margin-bottom:.85rem;display:flex;align-items:center;gap:.5rem}
+
+    a{color:#38bdf8;text-decoration:none}a:hover{text-decoration:underline}
+    .links{display:flex;flex-wrap:wrap;gap:.5rem}
+    .link-pill{background:#0f1e33;border:1px solid #1e3a5f;border-radius:20px;padding:.3rem .85rem;font-size:.8rem;color:#7dd3fc}
+    .link-pill:hover{background:#0f2847;text-decoration:none}
+
+    /* buttons */
+    .btn{background:#0369a1;color:#fff;border:none;border-radius:7px;padding:.45rem .9rem;cursor:pointer;font-size:.85rem;transition:background .15s,transform .1s;display:inline-flex;align-items:center;gap:.4rem}
+    .btn:hover{background:#0284c7}.btn:active{transform:scale(.97)}
+    .btn.red{background:#b91c1c}.btn.red:hover{background:#dc2626}
+    .btn.green{background:#047857}.btn.green:hover{background:#059669}
+    .btn.purple{background:#6d28d9}.btn.purple:hover{background:#7c3aed}
+    .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+    /* search panel specifics */
+    #searchControls{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin-bottom:1rem}
+    .phase-badge{background:#0f2847;border:1px solid #1e4a7a;border-radius:20px;padding:.25rem .8rem;font-size:.78rem;color:#7dd3fc;min-width:80px;text-align:center}
+    .phase-badge.running{border-color:#0369a1;color:#38bdf8;animation:pulse 1.5s infinite}
+    .phase-badge.done{border-color:#047857;color:#4ade80}
+    .phase-badge.stopped{border-color:#b45309;color:#fbbf24}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+
+    /* progress bar */
+    .prog-wrap{background:#0b0e17;border-radius:6px;height:8px;overflow:hidden;margin:.6rem 0}
+    .prog-fill{height:100%;background:linear-gradient(90deg,#1d4ed8,#38bdf8);border-radius:6px;transition:width .5s;width:0%}
+
+    /* hit feed */
+    #hitFeed{max-height:340px;overflow-y:auto;font-size:.78rem;display:flex;flex-direction:column;gap:2px}
+    .hit-row{display:grid;grid-template-columns:1fr auto;gap:.5rem;background:#0f1929;border-radius:5px;padding:.35rem .6rem;align-items:center;animation:slideIn .25s ease}
+    @keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+    .hit-name{color:#e2e8f0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .hit-meta{color:#475569;font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .hit-group{color:#7dd3fc;font-size:.7rem;background:#0f2847;border-radius:3px;padding:.1rem .35rem;white-space:nowrap}
+
+    /* file log */
+    #fileLog{max-height:200px;overflow-y:auto;font-size:.72rem;font-family:monospace;color:#64748b}
+    .log-line{padding:.15rem 0;border-bottom:1px solid #0f1929}
+    .log-line.ok{color:#4ade80}.log-line.err{color:#f87171}.log-line.info{color:#fbbf24}
+
+    pre{background:#0b0e17;padding:.9rem;border-radius:6px;font-size:.75rem;overflow-x:auto;color:#64748b;max-height:280px;overflow-y:auto}
+    #smsg,#gmsg,#omsg{min-height:1.2rem;font-size:.83rem;margin-top:.5rem}
+    .ok{color:#4ade80}.err{color:#f87171}.info{color:#fbbf24}
+
+    /* source table */
+    .stbl{width:100%;border-collapse:collapse;font-size:.8rem;margin-top:.6rem}
+    .stbl th{text-align:left;color:#7dd3fc;padding:.35rem .5rem;border-bottom:1px solid #1e2d45}
+    .stbl td{padding:.3rem .5rem;border-bottom:1px solid #0f1929}
+    .stbl tr:hover td{background:#0f1929}
+    .badge{display:inline-block;border-radius:4px;padding:.1rem .45rem;font-size:.7rem;font-weight:600}
+    .badge.ok{background:#064e3b;color:#4ade80}.badge.err{background:#450a0a;color:#f87171}
+
+    ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:#0b0e17}::-webkit-scrollbar-thumb{background:#1e2d45;border-radius:3px}
+  </style>
+</head>
+<body>
+<h1>📡 IPTV Server Dashboard</h1>
+<p class="sub" id="subtitle">Ready</p>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('search')">🔍 GitHub Raw Search</button>
+  <button class="tab" onclick="switchTab('github')">🐙 Repo Sources</button>
+  <button class="tab" onclick="switchTab('original')">🏠 Original Source</button>
+  <button class="tab" onclick="switchTab('player')">📺 TV Player</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SEARCH PANEL
+═══════════════════════════════════════════════════════════════════ -->
+<div class="panel active" id="panel-search">
+
+  <!-- Live stat cards -->
+  <div class="grid">
+    <div class="card"><div class="val y" id="s-pages">0</div><div class="lbl">Pages Searched</div></div>
+    <div class="card"><div class="val" id="s-files">0</div><div class="lbl">Files Found</div></div>
+    <div class="card"><div class="val" id="s-fetched">0</div><div class="lbl">Files Fetched</div></div>
+    <div class="card"><div class="val" id="s-channels">0</div><div class="lbl">Channels Parsed</div></div>
+    <div class="card"><div class="val" id="s-unique">0</div><div class="lbl">Unique URLs</div></div>
+    <div class="card"><div class="val g" id="s-active">0</div><div class="lbl">✅ Working Streams</div></div>
+    <div class="card"><div class="val r" id="s-dead">0</div><div class="lbl">❌ Dead Streams</div></div>
+    <div class="card"><div class="val p" id="s-elapsed">0s</div><div class="lbl">Elapsed</div></div>
+  </div>
+
+  <!-- Controls -->
+  <div class="section">
+    <h2>⚙️ Controls</h2>
+    <div id="searchControls">
+      <button class="btn green" id="btnStart" onclick="startSearch()">🔍 Start GitHub Raw Search</button>
+      <button class="btn red"   id="btnStop"  onclick="stopSearch()" disabled>⏹ Stop</button>
+      <span class="phase-badge" id="phaseBadge">idle</span>
+    </div>
+    <div class="prog-wrap"><div class="prog-fill" id="progFill"></div></div>
+    <div id="smsg" class="info"></div>
+    <p style="font-size:.75rem;color:#475569;margin-top:.5rem">
+      Searches GitHub code API for all public <code>.m3u</code> / <code>.m3u8</code> files,
+      fetches each raw file, parses channels, and checks every stream URL.
+      Set <code>GITHUB_TOKEN</code> in <code>.env</code> for higher rate limits.
+    </p>
+  </div>
+
+  <!-- Stream check progress -->
+  <div class="section" id="checkSection" style="display:none">
+    <h2>🔄 Stream Check Progress</h2>
+    <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+      <span id="checkPct" style="font-size:1.4rem;font-weight:700;color:#38bdf8">0%</span>
+      <span id="checkCount" style="color:#94a3b8;font-size:.85rem">0 / 0 checked</span>
+    </div>
+    <div class="prog-wrap" style="margin-top:.5rem"><div class="prog-fill" id="checkFill"></div></div>
+  </div>
+
+  <!-- Live hit feed -->
+  <div class="section">
+    <h2>
+      ✅ Live Working Streams
+      <span id="hitBadge" style="background:#047857;color:#4ade80;border-radius:12px;padding:.1rem .55rem;font-size:.72rem;font-weight:700">0</span>
+    </h2>
+    <div id="hitFeed"></div>
+  </div>
+
+  <!-- File fetch log -->
+  <div class="section">
+    <h2>📂 File Fetch Log</h2>
+    <div id="fileLog"></div>
+  </div>
+
+  <!-- Download links (shown when results exist) -->
+  <div class="section" id="searchLinks" style="display:none">
+    <h2>📥 Download Results + Watch</h2>
+    <div class="links">
+      <a class="link-pill" href="/search.m3u">✅ Working Streams (search.m3u)</a>
+      <a class="link-pill" href="/search-dead.m3u">💀 Dead Streams (search-dead.m3u)</a>
+      <a class="link-pill" href="/api/search-stats">📊 Report (JSON)</a>
+    </div>
+    <div style="margin-top:.8rem">
+      <a class="btn green" href="/tv.html?src=search" target="_blank">📺 Watch Working Streams Now</a>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     GITHUB REPO PANEL
+═══════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-github">
+  <div class="grid">
+    <div class="card"><div class="val y" id="g-repos">—</div><div class="lbl">Repos</div></div>
+    <div class="card"><div class="val" id="g-fetched">—</div><div class="lbl">Channels Fetched</div></div>
+    <div class="card"><div class="val" id="g-unique">—</div><div class="lbl">Unique URLs</div></div>
+    <div class="card"><div class="val g" id="g-active">—</div><div class="lbl">Working</div></div>
+    <div class="card"><div class="val r" id="g-dead">—</div><div class="lbl">Dead</div></div>
+    <div class="card"><div class="val y" id="g-ratio">—</div><div class="lbl">Active Ratio</div></div>
+  </div>
+  <div class="section">
+    <h2>📂 Playlists</h2>
+    <div class="links">
+      <a class="link-pill" href="/github.m3u">✅ Working (github.m3u)</a>
+      <a class="link-pill" href="/github-dead.m3u">💀 Dead (github-dead.m3u)</a>
+      <a class="link-pill" href="/api/github-sources">🗂 Sources (JSON)</a>
+    </div>
+    <div style="margin-top:.8rem">
+      <a class="btn purple" href="/tv.html?src=github" target="_blank">📺 Watch GitHub Channels Now</a>
+    </div>
+  </div>
+  <div class="section">
+    <h2>⚙️ Actions</h2>
+    <button class="btn green" id="btnGH" onclick="triggerGH()">🐙 Fetch All Repo Sources + Check Streams</button>
+    <div id="gmsg"></div>
+  </div>
+  <div class="section">
+    <h2>📋 Source Status</h2>
+    <div id="ghTableWrap"><p style="color:#475569;font-size:.82rem">Run a fetch to see results.</p></div>
+  </div>
+  <div class="section"><h2>📊 Report</h2><pre id="greport">No report yet.</pre></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     ORIGINAL PANEL
+═══════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-original">
+  <div class="grid">
+    <div class="card"><div class="val g" id="active">—</div><div class="lbl">Active</div></div>
+    <div class="card"><div class="val r" id="dead">—</div><div class="lbl">Dead</div></div>
+    <div class="card"><div class="val" id="elapsed">—</div><div class="lbl">Elapsed (s)</div></div>
+    <div class="card"><div class="val" id="net">—</div><div class="lbl">Net Change</div></div>
+  </div>
+  <div class="section">
+    <h2>📂 Playlists</h2>
+    <div class="links">
+      <a class="link-pill" href="/index.m3u">🎬 Active (index.m3u)</a>
+      <a class="link-pill" href="/dead.m3u">💀 Dead (dead.m3u)</a>
+      <a class="link-pill" href="/playlist.m3u">🎵 Music+Podcasts</a>
+    </div>
+  </div>
+  <div class="section">
+    <h2>⚙️ Actions</h2>
+    <button class="btn" onclick="triggerOrig('update')">🔄 Update Channels</button>
+    <button class="btn purple" onclick="triggerOrig('generate-playlist')">🎙 Regen Podcasts</button>
+    <div id="omsg"></div>
+  </div>
+  <div class="section"><h2>📊 Report</h2><pre id="oreport">Loading…</pre></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     PLAYER PANEL
+═══════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-player">
+  <div class="section">
+    <h2>📺 TV Player — Watch Working Streams</h2>
+    <p style="color:#64748b;font-size:.83rem;margin-bottom:1rem">Pick a source below. The player will open and load those verified working channels directly.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:.6rem">
+      <a class="btn green" href="/tv.html?src=search" target="_blank">▶ Watch GitHub Search Results</a>
+      <a class="btn purple" href="/tv.html?src=github" target="_blank">▶ Watch Repo Sources</a>
+      <a class="btn" href="/tv.html?src=index" target="_blank">▶ Watch Original Source</a>
+      <a class="btn" href="/tv.html" target="_blank">🎬 Open Player (default)</a>
+    </div>
+    <p style="color:#475569;font-size:.75rem;margin-top:.8rem">💡 Tip: Run a <strong>GitHub Raw Search</strong> first, then click "Watch GitHub Search Results" for the freshest verified streams.</p>
+  </div>
+  <div class="section" id="liveWatchSection" style="display:none">
+    <h2>🟢 Live Working Streams — Quick Watch</h2>
+    <p style="color:#64748b;font-size:.8rem;margin-bottom:.8rem">These are channels found working in the current/last search.</p>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+      <a class="btn green" href="/tv.html?src=search" target="_blank" id="watchSearchBtn">▶ Watch <span id="watchCount">0</span> Working Channels</a>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Tab switching ──────────────────────────────────────────────────────────
+const TAB_NAMES = ['search','github','original','player'];
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', TAB_NAMES[i] === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  if (name === 'original') loadOriginal();
+  if (name === 'github')   loadGH();
+}
+
+// ── SSE live search ────────────────────────────────────────────────────────
+let evtSource = null;
+let startTs   = null;
+let elapsedTimer = null;
+let hitCount  = 0;
+const MAX_FEED_ROWS = 200;
+const MAX_LOG_LINES = 300;
+
+// Live counters object
+const C = {
+  pages:0, files:0, fetched:0, channels:0, unique:0, active:0, dead:0
+};
+
+function setCard(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function updateCards() {
+  setCard('s-pages',    C.pages);
+  setCard('s-files',    C.files);
+  setCard('s-fetched',  C.fetched);
+  setCard('s-channels', C.channels);
+  setCard('s-unique',   C.unique);
+  setCard('s-active',   C.active);
+  setCard('s-dead',     C.dead);
+  setCard('hitBadge',   C.active);
+}
+
+function setPhaseBadge(text, cls) {
+  const b = document.getElementById('phaseBadge');
+  b.textContent = text;
+  b.className   = 'phase-badge ' + (cls||'');
+}
+
+function setProgress(pct) {
+  document.getElementById('progFill').style.width = Math.min(pct,100) + '%';
+}
+
+function addHit(data) {
+  const feed = document.getElementById('hitFeed');
+  const row  = document.createElement('div');
+  row.className = 'hit-row';
+  const group = data.group ? `<span class="hit-group">${esc(data.group)}</span>` : '';
+  row.innerHTML = `
+    <div>
+      <div class="hit-name">${esc(data.name||'Unnamed')}</div>
+      <div class="hit-meta">${esc(data.repo||'')} · <a href="${esc(data.url)}" target="_blank" style="color:#475569;font-size:.7rem">${esc(data.url.slice(0,60))}…</a></div>
+    </div>
+    <div>${group}</div>`;
+  feed.prepend(row);
+  // trim
+  while (feed.children.length > MAX_FEED_ROWS) feed.removeChild(feed.lastChild);
+}
+
+function addLog(text, cls) {
+  const log  = document.getElementById('fileLog');
+  const line = document.createElement('div');
+  line.className = 'log-line ' + (cls||'');
+  line.textContent = text;
+  log.prepend(line);
+  while (log.children.length > MAX_LOG_LINES) log.removeChild(log.lastChild);
+}
+
+function startElapsedTimer() {
+  startTs = Date.now();
+  clearInterval(elapsedTimer);
+  elapsedTimer = setInterval(() => {
+    const s = ((Date.now() - startTs)/1000).toFixed(0);
+    setCard('s-elapsed', s + 's');
+  }, 1000);
+}
+
+function stopElapsedTimer(finalSec) {
+  clearInterval(elapsedTimer);
+  if (finalSec !== undefined) setCard('s-elapsed', finalSec + 's');
+}
+
+function connectSSE() {
+  if (evtSource) { evtSource.close(); evtSource = null; }
+
+  evtSource = new EventSource('/api/search/stream');
+
+  evtSource.addEventListener('init', (e) => {
+    const d = JSON.parse(e.data);
+    if (d.running) setSearchRunning(true);
+  });
+
+  evtSource.addEventListener('status', (e) => {
+    const d = JSON.parse(e.data);
+    setSearchRunning(d.running);
+    if (!d.running) stopElapsedTimer();
+  });
+
+  evtSource.addEventListener('phase', (e) => {
+    const d = JSON.parse(e.data);
+    const phaseMap = { search:'searching', fetch:'fetching', check:'checking', done:'done', stopped:'stopped' };
+    const clsMap   = { done:'done', stopped:'stopped' };
+    setPhaseBadge(phaseMap[d.phase] || d.phase, clsMap[d.phase] || 'running');
+    document.getElementById('smsg').textContent = d.message || '';
+    document.getElementById('smsg').className   = d.phase === 'done' ? 'ok' : d.phase === 'stopped' ? 'info' : 'info';
+    if (d.phase === 'check') {
+      document.getElementById('checkSection').style.display = 'block';
+      setProgress(0);
+    }
+    if (d.phase === 'done' || d.phase === 'stopped') {
+      setProgress(100);
+      document.getElementById('searchLinks').style.display = 'block';
+    }
+  });
+
+  evtSource.addEventListener('page', (e) => {
+    const d = JSON.parse(e.data);
+    C.pages++;
+    C.files = d.filesQueued;
+    updateCards();
+    addLog(`[search] page ${d.page} "${d.query}" → ${d.itemsThisPage} items (${d.totalCount} total) | queued: ${d.filesQueued}`, 'info');
+    // search progress: assume up to 40 pages total
+    setProgress((C.pages / 40) * 40);
+  });
+
+  evtSource.addEventListener('file_start', (e) => {
+    const d = JSON.parse(e.data);
+    addLog(`[fetch] ${d.repo}/${d.path}…`);
+  });
+
+  evtSource.addEventListener('file_done', (e) => {
+    const d = JSON.parse(e.data);
+    C.fetched++;
+    if (d.ok) {
+      C.channels += (d.channels || 0);
+      C.unique   += (d.unique   || 0);
+    }
+    updateCards();
+    if (d.ok) addLog(`  ✅ ${d.repo} — ${d.channels} channels (${d.unique} new unique)`, 'ok');
+    else      addLog(`  ❌ ${d.repo} — ${d.error}`, 'err');
+    // fetch progress: 40–70%
+    const fetchPct = 40 + ((C.fetched / Math.max(C.files,1)) * 30);
+    setProgress(fetchPct);
+  });
+
+  evtSource.addEventListener('hit', (e) => {
+    const d = JSON.parse(e.data);
+    C.active++;
+    hitCount++;
+    updateCards();
+    addHit(d);
+  });
+
+  evtSource.addEventListener('check_prog', (e) => {
+    const d = JSON.parse(e.data);
+    C.active = d.active;
+    C.dead   = d.dead;
+    updateCards();
+    const pct = d.total ? ((d.checked / d.total) * 100).toFixed(1) : 0;
+    document.getElementById('checkPct').textContent   = pct + '%';
+    document.getElementById('checkCount').textContent = `${d.checked} / ${d.total} checked`;
+    document.getElementById('checkFill').style.width  = pct + '%';
+    // overall progress: 70–100%
+    setProgress(70 + (parseFloat(pct) / 100 * 30));
+  });
+
+  evtSource.addEventListener('done', (e) => {
+    const d = JSON.parse(e.data).stats || {};
+    if (d.elapsedSeconds !== undefined) stopElapsedTimer(d.elapsedSeconds);
+    document.getElementById('smsg').textContent = `Done! ${d.active||0} working streams. Elapsed: ${d.elapsedSeconds}s`;
+    document.getElementById('smsg').className   = 'ok';
+    // Show watch button
+    const wc = d.active || 0;
+    if (wc > 0) {
+      document.getElementById('watchCount').textContent = wc;
+      document.getElementById('liveWatchSection').style.display = 'block';
+    }
+  });
+
+  evtSource.addEventListener('error_ev', (e) => {
+    const d = JSON.parse(e.data);
+    addLog('[error] ' + d.message, 'err');
+  });
+
+  evtSource.onerror = () => {
+    // reconnect automatically handled by browser
+  };
+}
+
+function setSearchRunning(running) {
+  document.getElementById('btnStart').disabled = running;
+  document.getElementById('btnStop').disabled  = !running;
+  if (running) {
+    setPhaseBadge('running','running');
+    startElapsedTimer();
+  }
+}
+
+async function startSearch() {
+  // Reset counters
+  Object.keys(C).forEach(k => C[k] = 0);
+  hitCount = 0;
+  updateCards();
+  document.getElementById('hitFeed').innerHTML  = '';
+  document.getElementById('fileLog').innerHTML  = '';
+  document.getElementById('checkSection').style.display = 'none';
+  document.getElementById('searchLinks').style.display  = 'none';
+  document.getElementById('checkFill').style.width  = '0%';
+  document.getElementById('checkPct').textContent   = '0%';
+  document.getElementById('checkCount').textContent = '0 / 0';
+  setProgress(0);
+
+  const r = await fetch('/api/search/start', { method:'POST' });
+  const d = await r.json();
+  if (!d.ok) {
+    document.getElementById('smsg').textContent = d.message;
+    document.getElementById('smsg').className   = 'err';
+  }
+}
+
+async function stopSearch() {
+  const r = await fetch('/api/search/stop', { method:'POST' });
+  const d = await r.json();
+  document.getElementById('smsg').textContent = d.message;
+  document.getElementById('smsg').className   = 'info';
+  setPhaseBadge('stopping…','running');
+}
+
+// ── Original source ────────────────────────────────────────────────────────
+async function loadOriginal() {
+  try {
+    const r = await fetch('/api/stats');
+    const d = await r.json();
+    if (d.message) { document.getElementById('oreport').textContent = d.message; return; }
+    document.getElementById('active').textContent  = d.after?.active  ?? '—';
+    document.getElementById('dead').textContent    = d.after?.dead    ?? '—';
+    document.getElementById('elapsed').textContent = d.elapsedSeconds ?? '—';
+    const nc = d.netChange;
+    document.getElementById('net').textContent = nc != null ? (nc>=0?'+':'')+nc : '—';
+    document.getElementById('oreport').textContent = JSON.stringify(d, null, 2);
+  } catch { document.getElementById('oreport').textContent = 'Failed.'; }
+}
+
+async function triggerOrig(action) {
+  const msg = document.getElementById('omsg');
+  msg.className = 'info'; msg.textContent = 'Starting…';
+  const r = await fetch('/api/'+action, { method:'POST' });
+  const d = await r.json();
+  msg.className = 'ok'; msg.textContent = d.message;
+  setTimeout(loadOriginal, 3000);
+}
+
+// ── GitHub repo sources ────────────────────────────────────────────────────
+async function loadGH() {
+  try {
+    const r = await fetch('/api/github-stats');
+    const d = await r.json();
+    if (d.message) { document.getElementById('greport').textContent = d.message; return; }
+    document.getElementById('g-repos').textContent   = d.sources?.total   ?? '—';
+    document.getElementById('g-fetched').textContent = d.channels?.fetched ?? '—';
+    document.getElementById('g-unique').textContent  = d.channels?.unique  ?? '—';
+    document.getElementById('g-active').textContent  = d.channels?.active  ?? '—';
+    document.getElementById('g-dead').textContent    = d.channels?.dead    ?? '—';
+    document.getElementById('g-ratio').textContent   = d.channels?.activeRatio ?? '—';
+    document.getElementById('greport').textContent   = JSON.stringify(d, null, 2);
+    const detail = d.sources?.detail || [];
+    if (detail.length) {
+      let html = '<table class="stbl"><thead><tr><th>Label</th><th>Channels</th><th>Status</th></tr></thead><tbody>';
+      for (const s of detail) {
+        const badge = s.error
+          ? `<span class="badge err">❌ ${esc(s.error.slice(0,40))}</span>`
+          : `<span class="badge ok">✅ ${s.count}</span>`;
+        html += `<tr><td><a href="https://github.com/${esc(s.repo)}" target="_blank">${esc(s.label)}</a></td><td>${s.count}</td><td>${badge}</td></tr>`;
+      }
+      html += '</tbody></table>';
+      document.getElementById('ghTableWrap').innerHTML = html;
+    }
+  } catch { document.getElementById('greport').textContent = 'Failed.'; }
+}
+
+let ghRunning = false;
+async function triggerGH() {
+  if (ghRunning) return;
+  ghRunning = true;
+  const btn = document.getElementById('btnGH');
+  const msg = document.getElementById('gmsg');
+  btn.disabled = true; msg.className = 'info'; msg.textContent = 'Fetching…';
+  const r = await fetch('/api/github-fetch', { method:'POST' });
+  const d = await r.json();
+  msg.textContent = d.message;
+  const poll = setInterval(async () => {
+    const sr = await fetch('/api/github-stats');
+    const sd = await sr.json();
+    if (!sd.message) {
+      clearInterval(poll);
+      msg.className = 'ok'; msg.textContent = `Done! ${sd.channels?.active??'?'} working streams.`;
+      loadGH(); btn.disabled = false; ghRunning = false;
+    }
+  }, 7000);
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+connectSSE();
+loadOriginal();
+// Check if a search is already running (page reload)
+fetch('/api/search/status').then(r=>r.json()).then(d => {
+  if (d.running) setSearchRunning(true);
+  const report = fetch('/api/search-stats').then(r=>r.json()).then(rd => {
+    if (!rd.message) document.getElementById('searchLinks').style.display = 'block';
+  }).catch(()=>{});
+});
+</script>
+</body>
+</html>
